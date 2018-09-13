@@ -1,6 +1,23 @@
+//! # A Density-Based Algorithm for Discovering Clusters
+//!
+//! This algorithm finds all points within `eps` distance of each other and
+//! attempts to cluster them. If there are at least `mpt` points reachable
+//! (within distance `eps`) from a given point P, then all reachable points are
+//! clustered together. The algorithm then attempts to expand the cluster,
+//! finding all border points reachable from each point in the cluster
+//!
+//!
+//! See `Ester, Martin, et al. "A density-based algorithm for discovering
+//! clusters in large spatial databases with noise." Kdd. Vol. 96. No. 34.
+//! 1996.` for the original paper
+//!
+//! Thanks to the rusty_machine implementation for inspiration
+
 /// Calculate euclidean distance between two vectors
+///
+/// This is the default distance function
 #[inline]
-fn euclidean_distance<T>(a: &[T], b: &[T]) -> f64
+pub fn euclidean_distance<T>(a: &[T], b: &[T]) -> f64
 where
     f64: From<T>,
     T: Copy,
@@ -27,11 +44,11 @@ where
 }
 
 /// DBSCAN parameters
-pub struct Model<T> 
+pub struct Model<T>
 where
     T: Copy,
     f64: From<T>,
-    {
+{
     /// Epsilon value - maximum distance between points in a cluster
     pub eps: f64,
     /// Minimum number of points in a cluster
@@ -42,7 +59,7 @@ where
     v: Vec<bool>,
 }
 
-impl<T> Model<T> 
+impl<T> Model<T>
 where
     T: Copy,
     f64: From<T>,
@@ -62,9 +79,9 @@ where
         }
     }
 
-    /// Change the function used to calculate distance between points
-    pub fn set_distance_fn<F>(mut self, func:  fn(&[T], &[T]) -> f64) -> Model<T> 
-    {
+    /// Change the function used to calculate distance between points.
+    /// Euclidean distance is the default measurement used.
+    pub fn set_distance_fn<F>(mut self, func: fn(&[T], &[T]) -> f64) -> Model<T> {
         self.distance = func;
         self
     }
@@ -75,8 +92,7 @@ where
         index: usize,
         neighbors: &[usize],
         cluster: usize,
-    )
-    {
+    ) {
         self.c[index] = Some(cluster);
         for &n_idx in neighbors {
             // Have we previously visited this point?
@@ -95,8 +111,7 @@ where
     }
 
     #[inline]
-    fn range_query(&self, sample: &[T], population: &Vec<Vec<T>>) -> Vec<usize>
-    {
+    fn range_query(&self, sample: &[T], population: &Vec<Vec<T>>) -> Vec<usize> {
         let mut neighbors = Vec::new();
         for (i, p) in population.iter().enumerate() {
             if (self.distance)(sample, p) < self.eps {
@@ -107,19 +122,19 @@ where
     }
 
     /// Run the DBSCAN algorithm on a given population of datapoints.
-    /// 
+    ///
     /// A vector of `Option<usize>` is returned, where each element
     /// corresponds to a row in the input matrix. `Some(usize)` represents
     /// cluster membership, and `None` represents noise/outliers
     ///
     /// # Arguments
     /// * `population` - a matrix of datapoints, organized by rows
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust
     /// use dbscan::Model;
-    /// 
+    ///
     /// let model = Model::new(1.0, 3);
     /// let inputs = vec![
     ///     vec![1.0, 1.1],
@@ -136,8 +151,7 @@ where
     ///     vec![Some(0), Some(0), Some(0), Some(1), Some(1), Some(1), None]
     /// );
     /// ```
-    pub fn run(mut self, population: &Vec<Vec<T>>) -> Vec<Option<usize>>
-    {
+    pub fn run(mut self, population: &Vec<Vec<T>>) -> Vec<Option<usize>> {
         self.c = (0..population.len()).map(|_| None).collect();
         self.v = (0..population.len()).map(|_| false).collect();
 
