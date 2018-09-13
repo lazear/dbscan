@@ -4,4 +4,3 @@ version = "0.1.0"
 authors = ["Michael <Michael@LAZEAR-WORK>"]
 
 [dependencies]
-myriad = "0.1.1"
