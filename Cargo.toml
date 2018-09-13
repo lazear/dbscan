@@ -1,6 +1,10 @@
 [package]
 name = "dbscan"
 version = "0.1.0"
-authors = ["Michael <Michael@LAZEAR-WORK>"]
+authors = ["Michael Lazear <noreply@lazear.io>"]
+license = "MIT"
+description = "Dependency free implementation of DBSCAN clustering "
+repository = "https://github.com/lazear/dbscan.git"
+homepage = "https://github.com/lazear/dbscan"
 
 [dependencies]
