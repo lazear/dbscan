@@ -1,6 +1,6 @@
 [package]
 name = "dbscan"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Michael Lazear <noreply@lazear.io>"]
 license = "MIT"
 description = "Dependency free implementation of DBSCAN clustering "

@@ -13,6 +13,8 @@
 //!
 //! Thanks to the rusty_machine implementation for inspiration
 
+use Classification::{Core, Edge, Noise};
+
 /// Calculate euclidean distance between two vectors
 ///
 /// This is the default distance function
@@ -29,13 +31,24 @@ where
         }).sqrt()
 }
 
+/// Classification according to the DBSCAN algorithm
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+pub enum Classification {
+    /// A point with at least `min_points` neighbors within `eps` diameter
+    Core(usize),
+    /// A point within `eps` of a core point, but has less than `min_points` neighbors
+    Edge(usize),
+    /// A point with no connections
+    Noise,
+}
+
 /// Cluster datapoints using the DBSCAN algorithm
 ///
 /// # Arguments
 /// * `eps` - maximum distance between datapoints within a cluster
 /// * `min_points` - minimum number of datapoints to make a cluster
 /// * `input` - a Vec<Vec<f64>> of datapoints, organized by row
-pub fn cluster<T>(eps: f64, min_points: usize, input: &Vec<Vec<T>>) -> Vec<Option<usize>>
+pub fn cluster<T>(eps: f64, min_points: usize, input: &Vec<Vec<T>>) -> Vec<Classification>
 where
     T: Copy,
     f64: From<T>,
@@ -55,7 +68,7 @@ where
     pub mpt: usize,
 
     distance: fn(&[T], &[T]) -> f64,
-    c: Vec<Option<usize>>,
+    c: Vec<Classification>,
     v: Vec<bool>,
 }
 
@@ -93,17 +106,22 @@ where
         neighbors: &[usize],
         cluster: usize,
     ) {
-        self.c[index] = Some(cluster);
+        self.c[index] = Core(cluster);
         for &n_idx in neighbors {
             // Have we previously visited this point?
             let v = self.v[n_idx];
+            // n_idx is at least an edge point
+            if self.c[n_idx] == Noise {
+                self.c[n_idx] = Edge(cluster);
+            }
+
             if !v {
                 self.v[n_idx] = true;
-
                 // What about neighbors of this neighbor? Are they close enough to add into
                 // the current cluster? If so, recurse and add them.
                 let nn = self.range_query(&population[n_idx], population);
                 if nn.len() >= self.mpt {
+                    // n_idx is a core point, we can reach at least min_points neighbors
                     self.expand_cluster(population, n_idx, &nn, cluster);
                 }
             }
@@ -112,20 +130,18 @@ where
 
     #[inline]
     fn range_query(&self, sample: &[T], population: &Vec<Vec<T>>) -> Vec<usize> {
-        let mut neighbors = Vec::new();
-        for (i, p) in population.iter().enumerate() {
-            if (self.distance)(sample, p) < self.eps {
-                neighbors.push(i);
-            }
-        }
-        neighbors
+        population
+            .iter()
+            .enumerate()
+            .filter(|(_, pt)| euclidean_distance(sample, pt) < self.eps)
+            .map(|(idx, _)| idx)
+            .collect()
     }
 
     /// Run the DBSCAN algorithm on a given population of datapoints.
     ///
-    /// A vector of `Option<usize>` is returned, where each element
-    /// corresponds to a row in the input matrix. `Some(usize)` represents
-    /// cluster membership, and `None` represents noise/outliers
+    /// A vector of [`Classification`] enums is returned, where each element
+    /// corresponds to a row in the input matrix.
     ///
     /// # Arguments
     /// * `population` - a matrix of datapoints, organized by rows
@@ -133,12 +149,14 @@ where
     /// # Example
     ///
     /// ```rust
+    /// use dbscan::Classification::*;
     /// use dbscan::Model;
     ///
     /// let model = Model::new(1.0, 3);
     /// let inputs = vec![
+    ///     vec![1.5, 2.2],
     ///     vec![1.0, 1.1],
-    ///     vec![1.2, 0.8],
+    ///     vec![1.2, 1.4],
     ///     vec![0.8, 1.0],
     ///     vec![3.7, 4.0],
     ///     vec![3.9, 3.9],
@@ -148,11 +166,20 @@ where
     /// let output = model.run(&inputs);
     /// assert_eq!(
     ///     output,
-    ///     vec![Some(0), Some(0), Some(0), Some(1), Some(1), Some(1), None]
+    ///     vec![
+    ///         Edge(0),
+    ///         Core(0),
+    ///         Core(0),
+    ///         Core(0),
+    ///         Core(1),
+    ///         Core(1),
+    ///         Core(1),
+    ///         Noise
+    ///     ]
     /// );
     /// ```
-    pub fn run(mut self, population: &Vec<Vec<T>>) -> Vec<Option<usize>> {
-        self.c = (0..population.len()).map(|_| None).collect();
+    pub fn run(mut self, population: &Vec<Vec<T>>) -> Vec<Classification> {
+        self.c = (0..population.len()).map(|_| Noise).collect();
         self.v = (0..population.len()).map(|_| false).collect();
 
         let mut cluster = 0;
@@ -179,8 +206,9 @@ mod tests {
     fn cluster() {
         let model = Model::new(1.0, 3);
         let inputs = vec![
+            vec![1.5, 2.2],
             vec![1.0, 1.1],
-            vec![1.2, 0.8],
+            vec![1.2, 1.4],
             vec![0.8, 1.0],
             vec![3.7, 4.0],
             vec![3.9, 3.9],
@@ -190,8 +218,54 @@ mod tests {
         let output = model.run(&inputs);
         assert_eq!(
             output,
-            vec![Some(0), Some(0), Some(0), Some(1), Some(1), Some(1), None]
+            vec![
+                Edge(0),
+                Core(0),
+                Core(0),
+                Core(0),
+                Core(1),
+                Core(1),
+                Core(1),
+                Noise
+            ]
         );
+    }
+
+    #[test]
+    fn cluster_edge() {
+        let model = Model::new(0.253110, 3);
+        let inputs = vec![
+            vec![
+                0.3311755015020835,
+                0.20474852214361858,
+                0.21050489388506638,
+                0.23040992344219402,
+                0.023161159027037505,
+            ],
+            vec![
+                0.5112445458548497,
+                0.1898442816540571,
+                0.11674072294944157,
+                0.14853288499259437,
+                0.03363756454905728,
+            ],
+            vec![
+                0.581134172697341,
+                0.15084733646825743,
+                0.09997992993087741,
+                0.13580335513916678,
+                0.03223520576435743,
+            ],
+            vec![
+                0.17210416043100868,
+                0.3403172702783598,
+                0.18218098373740396,
+                0.2616980943829193,
+                0.04369949117030829,
+            ],
+        ];
+        let output = model.run(&inputs);
+        assert_eq!(output, vec![Core(0), Core(0), Edge(0), Edge(0)]);
     }
 
     #[test]
