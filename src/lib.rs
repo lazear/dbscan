@@ -133,7 +133,7 @@ where
         population
             .iter()
             .enumerate()
-            .filter(|(_, pt)| euclidean_distance(sample, pt) < self.eps)
+            .filter(|(_, pt)| (self.distance)(sample, pt) < self.eps)
             .map(|(idx, _)| idx)
             .collect()
     }
@@ -284,5 +284,19 @@ mod tests {
         let neighbours = model.range_query(&[1.0, 1.0], &inputs);
 
         assert!(neighbours.len() == 1);
+    }
+
+    fn taxicab(a: &[f64], b: &[f64]) -> f64 {
+        a.iter().zip(b.iter()).fold(0f64, |acc, (&x, &y)| {
+            acc + (f64::from(x) - f64::from(y)).abs()
+        })
+    }
+
+    #[test]
+    fn range_query_custom_distance() {
+        let model = Model::new(1.0, 3).set_distance_fn::<fn(&[f64], &[f64]) -> f64>(taxicab);
+        let inputs = vec![vec![1.0, 1.0], vec![1.1, 1.9], vec![3.0, 3.0]];
+        let neighbours = model.range_query(&[1.0, 1.0], &inputs);
+        assert_eq!(neighbours.len(), 1)
     }
 }
