@@ -133,7 +133,7 @@ where
         population
             .iter()
             .enumerate()
-            .filter(|(_, pt)| euclidean_distance(sample, pt) < self.eps)
+            .filter(|(_, pt)| (self.distance)(sample, pt) < self.eps)
             .map(|(idx, _)| idx)
             .collect()
     }
