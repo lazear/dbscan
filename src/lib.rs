@@ -100,9 +100,13 @@ where
         self
     }
 
-    fn expand_cluster(&mut self, population: &Vec<Vec<T>>, index: usize, cluster: usize) -> bool {
+    fn expand_cluster(
+        &mut self,
+        population: &[Vec<T>],
+        queue: &mut Vec<usize>,
+        cluster: usize,
+    ) -> bool {
         let mut new_cluster = false;
-        let mut queue = vec![index];
         while let Some(ind) = queue.pop() {
             let neighbors = self.range_query(&population[ind], population);
             if neighbors.len() < self.mpt {
@@ -117,7 +121,6 @@ where
                 }
 
                 if self.v[n_idx] {
-                    // If we've seen this point before stop processing
                     continue;
                 }
 
@@ -125,11 +128,11 @@ where
                 queue.push(n_idx);
             }
         }
-        return new_cluster;
+        new_cluster
     }
 
     #[inline]
-    fn range_query(&self, sample: &[T], population: &Vec<Vec<T>>) -> Vec<usize> {
+    fn range_query(&self, sample: &[T], population: &[Vec<T>]) -> Vec<usize> {
         population
             .iter()
             .enumerate()
@@ -183,14 +186,18 @@ where
         self.v = vec![false; population.len()];
 
         let mut cluster = 0;
-        for (idx, sample) in population.iter().enumerate() {
+        let mut queue = Vec::new();
+
+        for idx in 0..population.len() {
             if self.v[idx] {
                 continue;
             }
 
             self.v[idx] = true;
 
-            if self.expand_cluster(population, idx, cluster) {
+            queue.push(idx);
+
+            if self.expand_cluster(population, &mut queue, cluster) {
                 cluster += 1;
             }
         }
