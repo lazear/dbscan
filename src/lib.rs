@@ -28,7 +28,8 @@ where
         .zip(b.iter())
         .fold(0f64, |acc, (&x, &y)| {
             acc + (f64::from(x) - f64::from(y)).powi(2)
-        }).sqrt()
+        })
+        .sqrt()
 }
 
 /// Classification according to the DBSCAN algorithm
@@ -99,33 +100,32 @@ where
         self
     }
 
-    fn expand_cluster(
-        &mut self,
-        population: &Vec<Vec<T>>,
-        index: usize,
-        neighbors: &[usize],
-        cluster: usize,
-    ) {
-        self.c[index] = Core(cluster);
-        for &n_idx in neighbors {
-            // Have we previously visited this point?
-            let v = self.v[n_idx];
-            // n_idx is at least an edge point
-            if self.c[n_idx] == Noise {
-                self.c[n_idx] = Edge(cluster);
+    fn expand_cluster(&mut self, population: &Vec<Vec<T>>, index: usize, cluster: usize) -> bool {
+        let mut new_cluster = false;
+        let mut queue = vec![index];
+        while let Some(ind) = queue.pop() {
+            let neighbors = self.range_query(&population[ind], population);
+            if neighbors.len() < self.mpt {
+                continue;
             }
-
-            if !v {
-                self.v[n_idx] = true;
-                // What about neighbors of this neighbor? Are they close enough to add into
-                // the current cluster? If so, recurse and add them.
-                let nn = self.range_query(&population[n_idx], population);
-                if nn.len() >= self.mpt {
-                    // n_idx is a core point, we can reach at least min_points neighbors
-                    self.expand_cluster(population, n_idx, &nn, cluster);
+            new_cluster = true;
+            self.c[ind] = Core(cluster);
+            for n_idx in neighbors {
+                // n_idx is at least an edge point
+                if self.c[n_idx] == Noise {
+                    self.c[n_idx] = Edge(cluster);
                 }
+
+                if self.v[n_idx] {
+                    // If we've seen this point before stop processing
+                    continue;
+                }
+
+                self.v[n_idx] = true;
+                queue.push(n_idx);
             }
         }
+        return new_cluster;
     }
 
     #[inline]
@@ -179,19 +179,19 @@ where
     /// );
     /// ```
     pub fn run(mut self, population: &Vec<Vec<T>>) -> Vec<Classification> {
-        self.c = (0..population.len()).map(|_| Noise).collect();
-        self.v = (0..population.len()).map(|_| false).collect();
+        self.c = vec![Noise; population.len()];
+        self.v = vec![false; population.len()];
 
         let mut cluster = 0;
         for (idx, sample) in population.iter().enumerate() {
-            let v = self.v[idx];
-            if !v {
-                self.v[idx] = true;
-                let n = self.range_query(sample, population);
-                if n.len() >= self.mpt {
-                    self.expand_cluster(population, idx, &n, cluster);
-                    cluster += 1;
-                }
+            if self.v[idx] {
+                continue;
+            }
+
+            self.v[idx] = true;
+
+            if self.expand_cluster(population, idx, cluster) {
+                cluster += 1;
             }
         }
         self.c
